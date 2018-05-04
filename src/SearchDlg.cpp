@@ -2236,6 +2236,42 @@ bool grepWin_match_i(const std::wstring& the_regex, const TCHAR *pText)
     return false;
 }
 
+std::wstring GetSymbolicLinkTarget(std::wstring const& linkPath)
+{
+	TCHAR path[MAX_PATH];
+	CAutoFile hFile = CreateFile( linkPath.c_str(),
+		FILE_READ_EA,
+		FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+		0,
+		OPEN_EXISTING,
+		FILE_FLAG_BACKUP_SEMANTICS | FILE_ATTRIBUTE_REPARSE_POINT /*| FILE_FLAG_OPEN_REPARSE_POINT*/,
+		0);
+	if (INVALID_HANDLE_VALUE != hFile)
+	{
+		auto rcode = GetFinalPathNameByHandle(hFile, path, MAX_PATH, FILE_NAME_NORMALIZED);
+		switch (rcode)
+		{
+		case ERROR_PATH_NOT_FOUND:
+			return std::wstring();
+		case ERROR_NOT_ENOUGH_MEMORY:
+			return std::wstring();
+		case ERROR_INVALID_PARAMETER:
+			return std::wstring();
+		case ERROR_ACCESS_DENIED:
+			return std::wstring();
+		default:
+			break;
+		};
+
+		if (path[0] == '\\' && path[1] == '\\' && path[2] == '?' && path[3] == '\\')
+			return std::wstring(path + 4, path + rcode);
+		else
+			return std::wstring(path, path + rcode);
+	}
+
+	return std::wstring();
+}
+
 DWORD CSearchDlg::SearchThread()
 {
     std::unique_ptr<TCHAR[]> pathbuf(new TCHAR[MAX_PATH_NEW]);
@@ -2292,6 +2328,7 @@ DWORD CSearchDlg::SearchThread()
     }
 
     SendMessage(*this, SEARCH_START, 0, 0);
+	m_visited.clear();
 
     std::wstring SearchStringutf16;
     for (auto c : m_searchString)
@@ -2402,6 +2439,18 @@ DWORD CSearchDlg::SearchThread()
                     bool bSearch = ((m_bIncludeHidden)||((pFindData->dwFileAttributes & FILE_ATTRIBUTE_HIDDEN) == 0));
                     bSearch = bSearch && ((m_bIncludeSystem)||((pFindData->dwFileAttributes & FILE_ATTRIBUTE_SYSTEM) == 0));
                     std::wstring fullpath = searchpath + L"\\" + pFindData->cFileName;
+					if (bSearch && ((pFindData->dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0))
+					{
+						auto linkPath = fileEnumerator.GetFilePath() + L"\\";
+						auto realpath = GetSymbolicLinkTarget(linkPath);
+						auto iter = m_visited.lower_bound(realpath);
+						if (iter == m_visited.end() || m_visited.key_comp()(*it, realpath))
+							m_visited.insert(realpath);
+						else
+							bSearch = false;
+					} else {
+						m_visited.insert(fullpath);
+					}
                     bool bExcludeDir = bSearch && !m_excludedirspatternregex.empty() &&
                         grepWin_match_i(m_excludedirspatternregex, pFindData->cFileName) || grepWin_match_i(m_excludedirspatternregex, fullpath.c_str());
                     bSearch = bSearch && !bExcludeDir;
