@@ -2240,11 +2240,11 @@ std::wstring GetSymbolicLinkTarget(std::wstring const& linkPath)
 {
 	TCHAR path[MAX_PATH];
 	CAutoFile hFile = CreateFile( linkPath.c_str(),
-		FILE_READ_EA,
-		FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+		0,
+		0,	
 		0,
 		OPEN_EXISTING,
-		FILE_FLAG_BACKUP_SEMANTICS | FILE_ATTRIBUTE_REPARSE_POINT /*| FILE_FLAG_OPEN_REPARSE_POINT*/,
+		FILE_FLAG_BACKUP_SEMANTICS,
 		0);
 	if (INVALID_HANDLE_VALUE != hFile)
 	{
@@ -2328,7 +2328,7 @@ DWORD CSearchDlg::SearchThread()
     }
 
     SendMessage(*this, SEARCH_START, 0, 0);
-	m_visited.clear();
+    std::set<std::wstring> visited;
 
     std::wstring SearchStringutf16;
     for (auto c : m_searchString)
@@ -2443,13 +2443,13 @@ DWORD CSearchDlg::SearchThread()
 					{
 						auto linkPath = fileEnumerator.GetFilePath() + L"\\";
 						auto realpath = GetSymbolicLinkTarget(linkPath);
-						auto iter = m_visited.lower_bound(realpath);
-						if (iter == m_visited.end() || m_visited.key_comp()(*it, realpath))
-							m_visited.insert(realpath);
+						auto iter = visited.lower_bound(realpath);
+						if (iter == visited.end() || visited.key_comp()(*it, realpath))
+							visited.insert(realpath);
 						else
 							bSearch = false;
 					} else {
-						m_visited.insert(fullpath);
+						visited.insert(fullpath);
 					}
                     bool bExcludeDir = bSearch && !m_excludedirspatternregex.empty() &&
                         grepWin_match_i(m_excludedirspatternregex, pFindData->cFileName) || grepWin_match_i(m_excludedirspatternregex, fullpath.c_str());

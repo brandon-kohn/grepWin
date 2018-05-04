@@ -164,7 +164,6 @@ private:
 
     std::vector<CSearchInfo> m_items;
     std::set<std::wstring>  m_backupandtempfiles;
-    std::set<std::wstring>  m_visited;
     int                     m_totalitems;
     int                     m_searchedItems;
     int                     m_totalmatches;
